@@ -40,6 +40,51 @@ type InstallArgs struct {
 }
 
 func (l *Lefthook) Install(ctx context.Context, args InstallArgs, hooks []string) error {
+	// Check for core.hooksPath configuration
+	localHooksPath, globalHooksPath, err := l.checkHooksPath()
+	if err != nil {
+		return fmt.Errorf("failed to check core.hooksPath: %w", err)
+	}
+
+	hasLocal := len(localHooksPath) > 0
+	hasGlobal := len(globalHooksPath) > 0
+
+	if hasLocal || hasGlobal {
+		if !args.Force {
+			// Build error message with all configured hooksPath
+			var errMsg strings.Builder
+			var hints []string
+
+			if hasLocal {
+				errMsg.WriteString(fmt.Sprintf("core.hooksPath is set locally to '%s'.\n", localHooksPath))
+				hints = append(hints, "hint:   git config --unset-all --local core.hooksPath")
+			}
+			if hasGlobal {
+				errMsg.WriteString(fmt.Sprintf("core.hooksPath is set globally to '%s'.\n", globalHooksPath))
+				hints = append(hints, "hint:   git config --unset-all --global core.hooksPath")
+			}
+
+			errMsg.WriteString("hint: Run these commands to remove it:\n")
+			errMsg.WriteString(strings.Join(hints, "\n"))
+			errMsg.WriteString("\nhint: Or run lefthook with --force to automatically unset it:\n")
+			errMsg.WriteString("hint:   lefthook install --force")
+
+			return errors.New(errMsg.String())
+		}
+
+		// Force mode: warn and unset
+		if hasLocal {
+			log.Warnf("core.hooksPath is set locally to '%s'.", localHooksPath)
+		}
+		if hasGlobal {
+			log.Warnf("core.hooksPath is set globally to '%s'.", globalHooksPath)
+		}
+
+		if err := l.unsetHooksPath(localHooksPath, globalHooksPath); err != nil {
+			return err
+		}
+	}
+
 	cfg, err := l.readOrCreateConfig()
 	if err != nil {
 		return err
@@ -457,6 +502,43 @@ func (l *Lefthook) ensureHooksDirExists() error {
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// checkHooksPath checks if core.hooksPath is configured locally or globally.
+// Returns local path, global path, and error.
+func (l *Lefthook) checkHooksPath() (local, global string, err error) {
+	// Check local configuration with explicit --local flag
+	localPath, err := l.repo.Git.Cmd([]string{"git", "config", "--local", "core.hooksPath"})
+	if err == nil && len(strings.TrimSpace(localPath)) > 0 {
+		local = strings.TrimSpace(localPath)
+	}
+
+	// Check global configuration with explicit --global flag
+	globalPath, err := l.repo.Git.Cmd([]string{"git", "config", "--global", "core.hooksPath"})
+	if err == nil && len(strings.TrimSpace(globalPath)) > 0 {
+		global = strings.TrimSpace(globalPath)
+	}
+
+	return local, global, nil
+}
+
+// unsetHooksPath removes core.hooksPath configuration.
+func (l *Lefthook) unsetHooksPath(local, global string) error {
+	if len(local) > 0 {
+		if _, err := l.repo.Git.Cmd([]string{"git", "config", "--local", "--unset-all", "core.hooksPath"}); err != nil {
+			return fmt.Errorf("failed to unset local core.hooksPath: %w", err)
+		}
+		log.Warn("local core.hooksPath has been unset.")
+	}
+
+	if len(global) > 0 {
+		if _, err := l.repo.Git.Cmd([]string{"git", "config", "--global", "--unset-all", "core.hooksPath"}); err != nil {
+			return fmt.Errorf("failed to unset global core.hooksPath: %w", err)
+		}
+		log.Warn("global core.hooksPath has been unset.")
 	}
 
 	return nil
