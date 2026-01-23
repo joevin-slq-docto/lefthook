@@ -293,7 +293,8 @@ remotes:
 		t.Run(fmt.Sprintf("%d: %s", n, tt.name), func(t *testing.T) {
 			assert := assert.New(t)
 
-			// Add git config checks for core.hooksPath if not already present
+			// Prepend git config commands required by getHooksPathConfig() in install.go.
+			// These commands are always called at the start of Install() to detect core.hooksPath conflicts.
 			gitCmds := tt.git
 			if len(gitCmds) == 0 || gitCmds[0].Command != "git config --local core.hooksPath" {
 				gitCmds = append([]cmdtest.Out{
