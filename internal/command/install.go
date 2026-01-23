@@ -470,7 +470,6 @@ func (l *Lefthook) ensureHooksDirExists() error {
 }
 
 // getHooksPathConfig checks if core.hooksPath is configured locally or globally.
-// Returns local path and global path.
 func (l *Lefthook) getHooksPathConfig() (local, global string) {
 	local, _ = l.repo.Git.Cmd([]string{"git", "config", "--local", "core.hooksPath"})
 	global, _ = l.repo.Git.Cmd([]string{"git", "config", "--global", "core.hooksPath"})
@@ -478,8 +477,6 @@ func (l *Lefthook) getHooksPathConfig() (local, global string) {
 }
 
 // ensureNoHooksPath ensures core.hooksPath is not configured.
-// If force is false, returns an error with instructions.
-// If force is true, warns and unsets the conflicting configurations.
 func (l *Lefthook) ensureNoHooksPath(local, global string, force bool) error {
 	hasLocal := len(local) > 0
 	hasGlobal := len(global) > 0
@@ -488,11 +485,12 @@ func (l *Lefthook) ensureNoHooksPath(local, global string, force bool) error {
 		return nil
 	}
 
+	// If force is false, returns an error with instructions.
 	if !force {
 		return formatHooksPathError(local, global)
 	}
 
-	// Force mode: warn and unset
+	// If force is true, warns and unsets the conflicting configurations.
 	if hasLocal {
 		log.Warnf("core.hooksPath is set locally to '%s'.", local)
 	}
